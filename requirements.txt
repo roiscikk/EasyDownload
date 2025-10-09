@@ -1,0 +1,5 @@
+yt-dlp
+spotdl
+ffmpeg
+ffmpeg-python
+PyQt6
