@@ -27,4 +27,3 @@ Tip: If the icon doesn't appear, ensure the ICO file is a valid Windows icon (co
 Gui :
 
 <img width="690" height="498" alt="image" src="https://github.com/user-attachments/assets/063721a8-bc6e-471c-8b00-7b82403394ef" />
-<img width="690" height="498" alt="image" src="https://github.com/user-attachments/assets/063721a8-bc6e-471c-8b00-7b82403394ef" />
