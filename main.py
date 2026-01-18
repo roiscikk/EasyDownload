@@ -6,8 +6,7 @@ import subprocess
 import urllib.request
 import zipfile
 import tempfile
-import platform
-import time
+from typing import Any, cast
 from PyQt6 import QtWidgets, QtGui, QtCore
 import yt_dlp
 
@@ -82,31 +81,57 @@ class DownloaderWindow(QtWidgets.QWidget):
     show_info = QtCore.pyqtSignal(str, str)
     show_error = QtCore.pyqtSignal(str, str)
     progress_changed = QtCore.pyqtSignal(int)
-    def __init__(self):
+
+    lang: str
+    theme: str
+    help_btn: QtWidgets.QPushButton
+    theme_btn: QtWidgets.QPushButton
+    lang_combo: QtWidgets.QComboBox
+    platform_label: QtWidgets.QLabel
+    platform_combo: QtWidgets.QComboBox
+    url_label: QtWidgets.QLabel
+    url_edit: QtWidgets.QLineEdit
+    mode_label: QtWidgets.QLabel
+    mode_btn: QtWidgets.QPushButton
+    format_group: QtWidgets.QButtonGroup
+    mp3_radio: QtWidgets.QRadioButton
+    mp4_radio: QtWidgets.QRadioButton
+    flac_radio: QtWidgets.QRadioButton
+    format_label: QtWidgets.QLabel
+    quality_label: QtWidgets.QLabel
+    quality_combo: QtWidgets.QComboBox
+    dir_edit: QtWidgets.QLineEdit
+    choose_btn: QtWidgets.QPushButton
+    dir_label: QtWidgets.QLabel
+    progress: QtWidgets.QProgressBar
+    status_label: QtWidgets.QLabel
+    download_btn: QtWidgets.QPushButton
+
+    def __init__(self) -> None:
         super().__init__()
         self.lang = 'tr'
         self.theme = 'light'
         self.init_ui()
         # Connect signals to GUI slots
-        self.status_changed.connect(self.status_label.setText)
-        self.show_info.connect(self._on_show_info)
-        self.show_error.connect(self._on_show_error)
-        self.progress_changed.connect(self.progress.setValue)
+        cast(Any, self.status_changed).connect(self.status_label.setText)
+        cast(Any, self.show_info).connect(self._on_show_info)
+        cast(Any, self.show_error).connect(self._on_show_error)
+        cast(Any, self.progress_changed).connect(self.progress.setValue)
 
         # Start background FFmpeg check
         threading.Thread(target=self.check_ffmpeg, daemon=True).start()
 
-    def _on_show_info(self, title, text):
+    def _on_show_info(self, title: str, text: str) -> None:
         QtWidgets.QMessageBox.information(self, title, text)
 
-    def _on_show_error(self, title, text):
+    def _on_show_error(self, title: str, text: str) -> None:
         QtWidgets.QMessageBox.critical(self, title, text)
 
-    def show_guide(self):
+    def show_guide(self) -> None:
         # show localized guide text in an info dialog
         self.show_info.emit(_TRANSLATIONS[self.lang]['guide_title'], _TRANSLATIONS[self.lang]['guide_text'])
 
-    def init_ui(self):
+    def init_ui(self) -> None:
         self.setWindowTitle(_TRANSLATIONS[self.lang]['title'])
         self.resize(640, 520)
 
@@ -115,16 +140,16 @@ class DownloaderWindow(QtWidgets.QWidget):
         # Top controls row (language and theme)
         top_row = QtWidgets.QHBoxLayout()
         top_row.addStretch()
-        self.help_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['help'])
-        self.help_btn.clicked.connect(self.show_guide)
+        self.help_btn: QtWidgets.QPushButton = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['help'])
+        cast(Any, self.help_btn.clicked).connect(self.show_guide)
         top_row.addWidget(self.help_btn)
-        self.theme_btn = QtWidgets.QPushButton('Dark')
-        self.theme_btn.clicked.connect(self.toggle_theme)
+        self.theme_btn: QtWidgets.QPushButton = QtWidgets.QPushButton('Dark')
+        cast(Any, self.theme_btn.clicked).connect(self.toggle_theme)
         top_row.addWidget(self.theme_btn)
-        self.lang_combo = QtWidgets.QComboBox()
-        self.lang_combo.addItems(['Türkçe', 'English'])
+        self.lang_combo: QtWidgets.QComboBox = QtWidgets.QComboBox()
+        cast(Any, self.lang_combo).addItems(['Türkçe', 'English'])
         self.lang_combo.setCurrentIndex(0)
-        self.lang_combo.currentIndexChanged.connect(self.change_language)
+        cast(Any, self.lang_combo.currentIndexChanged).connect(self.change_language)
         top_row.addWidget(self.lang_combo)
         main_layout.addLayout(top_row)
 
@@ -132,8 +157,8 @@ class DownloaderWindow(QtWidgets.QWidget):
 
         # Platform
         self.platform_label = QtWidgets.QLabel(_TRANSLATIONS[self.lang]['platform'])
-        self.platform_combo = QtWidgets.QComboBox()
-        self.platform_combo.addItems(['YouTube', 'Instagram', 'TikTok', 'Pinterest', 'Spotify'])
+        self.platform_combo: QtWidgets.QComboBox = QtWidgets.QComboBox()
+        cast(Any, self.platform_combo).addItems(['YouTube', 'Instagram', 'TikTok', 'Pinterest', 'Spotify'])
         form.addRow(self.platform_label, self.platform_combo)
 
         # URL
@@ -144,9 +169,9 @@ class DownloaderWindow(QtWidgets.QWidget):
         # Mode
         mode_h = QtWidgets.QHBoxLayout()
         self.mode_label = QtWidgets.QLabel(_TRANSLATIONS[self.lang]['mode'])
-        self.mode_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['single'])
+        self.mode_btn: QtWidgets.QPushButton = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['single'])
         self.mode_btn.setCheckable(True)
-        self.mode_btn.toggled.connect(self.mode_toggled)
+        cast(Any, self.mode_btn.toggled).connect(self.mode_toggled)
         mode_h.addWidget(self.mode_label)
         mode_h.addWidget(self.mode_btn)
         form.addRow(mode_h)
@@ -154,17 +179,17 @@ class DownloaderWindow(QtWidgets.QWidget):
         # Format
         format_h = QtWidgets.QHBoxLayout()
         self.format_group = QtWidgets.QButtonGroup(self)
-        self.mp3_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp3'])
-        self.mp4_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp4'])
-        self.flac_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['flac'])
+        self.mp3_radio: QtWidgets.QRadioButton = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp3'])
+        self.mp4_radio: QtWidgets.QRadioButton = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp4'])
+        self.flac_radio: QtWidgets.QRadioButton = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['flac'])
         self.mp4_radio.setChecked(True)
         self.format_group.addButton(self.mp3_radio)
         self.format_group.addButton(self.mp4_radio)
         self.format_group.addButton(self.flac_radio)
         # connect toggles to update quality UI
-        self.mp3_radio.toggled.connect(self.update_quality_ui)
-        self.mp4_radio.toggled.connect(self.update_quality_ui)
-        self.flac_radio.toggled.connect(self.update_quality_ui)
+        cast(Any, self.mp3_radio.toggled).connect(self.update_quality_ui)
+        cast(Any, self.mp4_radio.toggled).connect(self.update_quality_ui)
+        cast(Any, self.flac_radio.toggled).connect(self.update_quality_ui)
         self.format_label = QtWidgets.QLabel(_TRANSLATIONS[self.lang]['format'])
         format_h.addWidget(self.format_label)
         format_h.addWidget(self.mp3_radio)
@@ -174,14 +199,14 @@ class DownloaderWindow(QtWidgets.QWidget):
 
         # Quality
         self.quality_label = QtWidgets.QLabel(_TRANSLATIONS[self.lang]['quality_video'])
-        self.quality_combo = QtWidgets.QComboBox()
-        self.quality_combo.addItems(['360p', '480p', '720p', '1080p'])
+        self.quality_combo: QtWidgets.QComboBox = QtWidgets.QComboBox()
+        cast(Any, self.quality_combo).addItems(['360p', '480p', '720p', '1080p'])
         form.addRow(self.quality_label, self.quality_combo)
 
         # Download location
         self.dir_edit = QtWidgets.QLineEdit()
-        self.choose_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['choose_location'])
-        self.choose_btn.clicked.connect(self.choose_folder)
+        self.choose_btn: QtWidgets.QPushButton = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['choose_location'])
+        cast(Any, self.choose_btn.clicked).connect(self.choose_folder)
         dir_h = QtWidgets.QHBoxLayout()
         dir_h.addWidget(self.dir_edit)
         dir_h.addWidget(self.choose_btn)
@@ -191,31 +216,31 @@ class DownloaderWindow(QtWidgets.QWidget):
         main_layout.addLayout(form)
 
         # Progress
-        self.progress = QtWidgets.QProgressBar()
+        self.progress: QtWidgets.QProgressBar = QtWidgets.QProgressBar()
         main_layout.addWidget(self.progress)
 
         # Status
-        self.status_label = QtWidgets.QLabel('')
+        self.status_label: QtWidgets.QLabel = QtWidgets.QLabel('')
         main_layout.addWidget(self.status_label)
 
         # Download button
-        self.download_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['download'])
-        self.download_btn.clicked.connect(self.start_download)
+        self.download_btn: QtWidgets.QPushButton = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['download'])
+        cast(Any, self.download_btn.clicked).connect(self.start_download)
         main_layout.addWidget(self.download_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self.apply_theme()
         # ensure quality UI reflects current format on startup
         self.update_quality_ui()
 
-    def mode_toggled(self, checked):
+    def mode_toggled(self, checked: bool) -> None:
         self.mode_btn.setText(_TRANSLATIONS[self.lang]['playlist'] if checked else _TRANSLATIONS[self.lang]['single'])
 
-    def choose_folder(self):
+    def choose_folder(self) -> None:
         d = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
         if d:
             self.dir_edit.setText(d)
 
-    def change_language(self, idx):
+    def change_language(self, idx: int) -> None:
         self.lang = 'tr' if idx == 0 else 'en'
         self.setWindowTitle(_TRANSLATIONS[self.lang]['title'])
         # update labels
@@ -238,7 +263,7 @@ class DownloaderWindow(QtWidgets.QWidget):
         # update theme button text to localized value
         self.theme_btn.setText(_TRANSLATIONS[self.lang]['dark'] if self.theme == 'light' else _TRANSLATIONS[self.lang]['light'])
 
-    def update_quality_ui(self):
+    def update_quality_ui(self, checked: bool = False) -> None:
         # Update the quality label and combo items based on selected format and current language
         if self.flac_radio.isChecked():
             label = _TRANSLATIONS[self.lang].get('quality_flac', 'Lossless')
@@ -260,18 +285,18 @@ class DownloaderWindow(QtWidgets.QWidget):
         current = self.quality_combo.currentText()
         self.quality_combo.blockSignals(True)
         self.quality_combo.clear()
-        self.quality_combo.addItems(items)
+        cast(Any, self.quality_combo).addItems(items)
         # restore if present
         if current in items:
             self.quality_combo.setCurrentText(current)
         self.quality_combo.blockSignals(False)
 
-    def toggle_theme(self):
+    def toggle_theme(self) -> None:
         self.theme = 'dark' if self.theme == 'light' else 'light'
         self.apply_theme()
         self.theme_btn.setText('Dark' if self.theme == 'light' else 'Light')
 
-    def apply_theme(self):
+    def apply_theme(self) -> None:
         if self.theme == 'dark':
             palette = QtGui.QPalette()
             palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor('#2e2e2e'))
@@ -283,9 +308,11 @@ class DownloaderWindow(QtWidgets.QWidget):
             palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor('#ffffff'))
             self.setPalette(palette)
         else:
-            self.setPalette(self.style().standardPalette())
+            style = self.style()
+            if style:
+                self.setPalette(style.standardPalette())
 
-    def check_ffmpeg(self):
+    def check_ffmpeg(self) -> None:
         # Prefer system ffmpeg if available
         if shutil.which('ffmpeg') is not None:
             self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_installed'])
@@ -330,7 +357,7 @@ class DownloaderWindow(QtWidgets.QWidget):
 
                 # find actual bin dir containing ffmpeg.exe
                 found_bin = None
-                for root, dirs, files in os.walk(extract_root):
+                for root, _, files in os.walk(extract_root):
                     if 'ffmpeg.exe' in files:
                         found_bin = root
                         break
@@ -370,11 +397,11 @@ class DownloaderWindow(QtWidgets.QWidget):
             except Exception:
                 pass
 
-    def start_download(self):
+    def start_download(self) -> None:
         # Start a download thread with current settings
         threading.Thread(target=self._download_thread, daemon=True).start()
 
-    def _download_thread(self):
+    def _download_thread(self) -> None:
         url = self.url_edit.text().strip()
         if not url:
             # emit error to GUI thread
@@ -387,8 +414,6 @@ class DownloaderWindow(QtWidgets.QWidget):
             format_type = 'FLAC'
         else:
             format_type = 'MP4'
-        quality = self.quality_combo.currentText()
-        is_playlist = self.mode_btn.isChecked()
 
         self.status_changed.emit('Downloading...')
         try:
@@ -398,6 +423,7 @@ class DownloaderWindow(QtWidgets.QWidget):
                 cmd = [sys.executable, '-m', 'spotdl', 'download', url, '--output', out_dir]
                 subprocess.run(cmd, check=True)
             else:
+                ydl_opts: dict[str, Any]
                 if format_type == 'FLAC':
                     ydl_opts = {
                         'format': 'bestaudio/best',
@@ -410,7 +436,7 @@ class DownloaderWindow(QtWidgets.QWidget):
                     }
                 else:
                     ydl_opts = {'format': 'bestaudio/best' if format_type == 'MP3' else 'best', 'outtmpl': os.path.join(out_dir, '%(title)s.%(ext)s')}
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
                     ydl.download([url])
             self.status_changed.emit(_TRANSLATIONS[self.lang]['download_complete'])
             # show info on GUI thread
