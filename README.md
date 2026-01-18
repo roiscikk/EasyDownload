@@ -16,14 +16,6 @@ EN
 - Test: Start the app, paste a YouTube URL, select `FLAC` as Format, and click `Download`. Check the output folder for a `.flac` file.
 - Note: Downloads and conversions may take time depending on your network and CPU.
 
-Build Windows GUI EXE (no console)
----
-1. Ensure `pyinstaller` is installed: `pip install pyinstaller`.
-2. Run the included script `build_no_console.bat` (double-click or run in PowerShell/Command Prompt).
-3. Output EXE will be in `dist\EasyDownload\EasyDownload.exe` and will use `EasyDownload.ico` from the project root.
-
-Tip: If the icon doesn't appear, ensure the ICO file is a valid Windows icon (contains proper icon sizes).
-
 Gui :
 
 <img width="690" height="498" alt="image" src="https://github.com/user-attachments/assets/063721a8-bc6e-471c-8b00-7b82403394ef" />
