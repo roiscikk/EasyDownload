@@ -100,7 +100,8 @@ def _strip_mix(url: str) -> str:
 
 
 # ─── Settings ───
-_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.settings.json')
+_CFG_DIR = os.path.join(os.path.expanduser('~'), 'EasyDownload')
+_CFG = os.path.join(_CFG_DIR, 'settings.json')
 
 
 def _load() -> dict:
@@ -113,6 +114,7 @@ def _load() -> dict:
 
 def _save(d: dict) -> None:
     try:
+        os.makedirs(_CFG_DIR, exist_ok=True)
         with open(_CFG, 'w') as f:
             json.dump(d, f)
     except Exception:
@@ -149,10 +151,11 @@ class App(ctk.CTk):
 
         geo = self._s.get('geo')
         if geo:
-            self.geometry(geo)
+            parts = geo.split('+')[0]
+            self.geometry(parts)
         else:
             self.geometry('560x950')
-            self.after(30, self._center)
+        self.after(30, self._center)
 
         self.protocol('WM_DELETE_WINDOW', self._quit)
         self._build()
