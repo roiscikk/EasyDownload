@@ -1,1032 +1,549 @@
 import os
 import sys
 import re
+import json
 import threading
 import shutil
 import subprocess
 import urllib.request
 import zipfile
 import tempfile
-from typing import Any, cast
-from PyQt6 import QtWidgets, QtGui, QtCore
+from typing import Any
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import yt_dlp
 
-# Minimal translation dict
-_TRANSLATIONS = {
-    'tr': {
-        'title': 'EasyDownload',
-        'platform': 'Platform',
-        'url': 'URL',
-        'mode': 'Mod',
-        'single': 'Tekli',
-        'playlist': 'Playlist',
-        'format': 'Format',
-        'mp3': 'MP3',
-        'mp4': 'MP4',
-        'flac': 'FLAC',
-        'quality_audio': 'Ses Kalitesi',
-        'quality_flac': 'Kayıpsız',
-        'quality_video': 'Görüntü Kalitesi',
-        'download_location': 'İndirme Konumu',
-        'choose_location': 'Göz At',
-        'download': '⬇  İndir',
-        'ffmpeg_downloading': 'FFmpeg indiriliyor...',
-        'ffmpeg_installed': 'Hazır',
-        'ffmpeg_failed': 'FFmpeg indirilemedi.',
-        'help': '?',
-        'guide_title': 'Kılavuz',
-        'guide_text': (
-            'EasyDownload Kılavuz:\n\n'
-            '• FFmpeg yüklü değilse uygulama otomatik indirir.\n'
-            '• YouTube Mix linki girerseniz sadece ilk şarkı indirilir.\n'
-            '• FLAC seçeneği kayıpsız ses çıktısı üretir.\n'
-            '• Playlist modu aktifken tüm liste indirilir.\n'
-            '• İndirmeler büyük olabilir; sabırlı olun.'
-        ),
-        'dark': '🌙',
-        'light': '☀️',
-        'download_complete': 'İndirme tamamlandı!',
-        'error': 'Hata',
-        'info': 'Bilgi',
-        'success': 'Başarılı',
-        'mix_detected': 'Mix linki algılandı – sadece ilk şarkı indirilecek.',
-        'downloading': 'İndiriliyor...',
-        'url_placeholder': 'YouTube, Instagram, TikTok linkini yapıştırın...',
-        'dir_placeholder': 'İndirme klasörü seçin veya yazın...',
-    },
-    'en': {
-        'title': 'EasyDownload',
-        'platform': 'Platform',
-        'url': 'URL',
-        'mode': 'Mode',
-        'single': 'Single',
-        'playlist': 'Playlist',
-        'format': 'Format',
-        'mp3': 'MP3',
-        'mp4': 'MP4',
-        'flac': 'FLAC',
-        'quality_audio': 'Audio Quality',
-        'quality_flac': 'Lossless',
-        'quality_video': 'Video Quality',
-        'download_location': 'Download Location',
-        'choose_location': 'Browse',
-        'download': '⬇  Download',
-        'ffmpeg_downloading': 'Downloading FFmpeg...',
-        'ffmpeg_installed': 'Ready',
-        'ffmpeg_failed': 'FFmpeg download failed.',
-        'help': '?',
-        'guide_title': 'Guide',
-        'guide_text': (
-            'EasyDownload Guide:\n\n'
-            '• If FFmpeg is not installed, the app will download it automatically.\n'
-            '• YouTube Mix links will only download the first song.\n'
-            '• FLAC option produces lossless audio output.\n'
-            '• Playlist mode downloads the entire list.\n'
-            '• Downloads can be large; be patient.'
-        ),
-        'dark': '🌙',
-        'light': '☀️',
-        'download_complete': 'Download complete!',
-        'error': 'Error',
-        'info': 'Info',
-        'success': 'Success',
-        'mix_detected': 'Mix link detected – only the first song will be downloaded.',
-        'downloading': 'Downloading...',
-        'url_placeholder': 'Paste YouTube, Instagram, TikTok link...',
-        'dir_placeholder': 'Choose or type download folder...',
-    }
+# ─── Translations ───
+_TR = {
+    'title': 'EasyDownload',
+    'platform': 'PLATFORM',
+    'url': 'URL',
+    'mode': 'MOD',
+    'mode_single': 'Tekli',
+    'mode_playlist': 'Playlist',
+    'format': 'FORMAT',
+    'quality_audio': 'SES KALİTESİ',
+    'quality_flac': 'KAYIPSIZ',
+    'quality_video': 'GÖRÜNTÜ KALİTESİ',
+    'download_location': 'İNDİRME KONUMU',
+    'browse': 'Göz At',
+    'download': 'İndir',
+    'ffmpeg_downloading': 'FFmpeg indiriliyor...',
+    'ffmpeg_installed': '✓ Hazır',
+    'ffmpeg_failed': 'FFmpeg indirilemedi.',
+    'download_complete': 'İndirme tamamlandı!',
+    'error': 'Hata',
+    'success': 'Başarılı',
+    'mix_detected': 'Mix algılandı – sadece ilk şarkı.',
+    'downloading': 'İndiriliyor...',
+    'url_placeholder': 'YouTube, Instagram, TikTok linkini yapıştırın...',
+    'dir_placeholder': 'İndirme klasörü...',
+    'guide_title': 'Kılavuz',
+    'guide_text': (
+        'EasyDownload Kılavuz:\n\n'
+        '• FFmpeg yoksa otomatik indirir.\n'
+        '• YouTube Mix → sadece ilk şarkı.\n'
+        '• FLAC = kayıpsız ses.\n'
+        '• Playlist modu ile tüm liste indirilir.'
+    ),
 }
 
-# ---------- Mix URL helpers ----------
-_MIX_LIST_RE = re.compile(r'[?&]list=(RD[A-Za-z0-9_-]+)')
+_EN = {
+    'title': 'EasyDownload',
+    'platform': 'PLATFORM',
+    'url': 'URL',
+    'mode': 'MODE',
+    'mode_single': 'Single',
+    'mode_playlist': 'Playlist',
+    'format': 'FORMAT',
+    'quality_audio': 'AUDIO QUALITY',
+    'quality_flac': 'LOSSLESS',
+    'quality_video': 'VIDEO QUALITY',
+    'download_location': 'DOWNLOAD LOCATION',
+    'browse': 'Browse',
+    'download': 'Download',
+    'ffmpeg_downloading': 'Downloading FFmpeg...',
+    'ffmpeg_installed': '✓ Ready',
+    'ffmpeg_failed': 'FFmpeg download failed.',
+    'download_complete': 'Download complete!',
+    'error': 'Error',
+    'success': 'Success',
+    'mix_detected': 'Mix detected – first song only.',
+    'downloading': 'Downloading...',
+    'url_placeholder': 'Paste YouTube, Instagram, TikTok link...',
+    'dir_placeholder': 'Download folder...',
+    'guide_title': 'Guide',
+    'guide_text': (
+        'EasyDownload Guide:\n\n'
+        '• Auto-downloads FFmpeg if missing.\n'
+        '• YouTube Mix → first song only.\n'
+        '• FLAC = lossless audio.\n'
+        '• Playlist mode downloads entire list.'
+    ),
+}
+
+_LANGS = {'tr': _TR, 'en': _EN}
+
+# ─── Mix URL helpers ───
+_MIX_RE = re.compile(r'[?&]list=(RD[A-Za-z0-9_-]+)')
 
 
-def _is_youtube_mix(url: str) -> bool:
-    """Return True if the URL contains a YouTube Mix playlist id (starts with RD)."""
-    return bool(_MIX_LIST_RE.search(url))
+def _is_mix(url: str) -> bool:
+    return bool(_MIX_RE.search(url))
 
 
-def _extract_single_video_url(url: str) -> str:
-    """Strip playlist parameters from a YouTube URL so only the single video remains."""
-    # Remove list= and index= and start_radio= params
+def _strip_mix(url: str) -> str:
     cleaned = re.sub(r'[&?](list|index|start_radio)=[^&]*', '', url)
-    # If we accidentally removed the leading ? replace first & with ?
     if '?' not in cleaned and '&' in cleaned:
         cleaned = cleaned.replace('&', '?', 1)
     return cleaned
 
 
-# ───────────── Modern Stylesheet ─────────────
-
-_DARK_STYLE = """
-* {
-    font-family: 'Segoe UI', 'Inter', sans-serif;
-    font-size: 13px;
-}
-
-QWidget#mainWidget {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 #0f0c29, stop:0.5 #302b63, stop:1 #24243e);
-}
-
-QLabel {
-    color: #e0e0ff;
-    font-weight: 500;
-}
-
-QLabel#titleLabel {
-    font-size: 22px;
-    font-weight: 700;
-    color: #ffffff;
-    padding: 4px 0;
-}
-
-QLabel#subtitleLabel {
-    font-size: 12px;
-    color: #a0a0cc;
-    padding-bottom: 8px;
-}
-
-QLabel#statusLabel {
-    font-size: 11px;
-    color: #8888bb;
-    padding: 2px 0;
-}
-
-QLabel#sectionLabel {
-    font-size: 11px;
-    font-weight: 600;
-    color: #9999cc;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding-top: 6px;
-}
-
-QLineEdit {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    padding: 10px 14px;
-    color: #ffffff;
-    selection-background-color: #6c63ff;
-}
-QLineEdit:focus {
-    border: 1px solid #6c63ff;
-    background: rgba(255, 255, 255, 0.10);
-}
-
-QComboBox {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    padding: 8px 14px;
-    color: #ffffff;
-    min-width: 100px;
-}
-QComboBox:hover {
-    border: 1px solid #6c63ff;
-}
-QComboBox::drop-down {
-    border: none;
-    width: 24px;
-}
-QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid #aaaadd;
-    margin-right: 8px;
-}
-QComboBox QAbstractItemView {
-    background: #2a2850;
-    border: 1px solid #3a3870;
-    border-radius: 8px;
-    selection-background-color: #6c63ff;
-    color: #ffffff;
-    padding: 4px;
-    outline: none;
-}
-QComboBox QAbstractItemView::item {
-    padding: 6px 10px;
-    border: none;
-    outline: none;
-}
-QComboBox QAbstractItemView::item:selected {
-    background: #6c63ff;
-    color: #ffffff;
-    border: none;
-}
-
-QPushButton {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 10px;
-    padding: 8px 18px;
-    color: #e0e0ff;
-    font-weight: 600;
-}
-QPushButton:hover {
-    background: rgba(108, 99, 255, 0.3);
-    border: 1px solid #6c63ff;
-}
-QPushButton:pressed {
-    background: rgba(108, 99, 255, 0.5);
-}
-
-QPushButton#downloadBtn {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6c63ff, stop:1 #e040fb);
-    border: none;
-    border-radius: 14px;
-    padding: 14px 48px;
-    color: #ffffff;
-    font-size: 15px;
-    font-weight: 700;
-    min-width: 220px;
-}
-QPushButton#downloadBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #7b73ff, stop:1 #e860ff);
-}
-QPushButton#downloadBtn:pressed {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #5a52dd, stop:1 #c030dd);
-}
-QPushButton#downloadBtn:disabled {
-    background: rgba(108, 99, 255, 0.3);
-    color: rgba(255,255,255,0.4);
-}
-
-QPushButton#modeBtn {
-    border-radius: 10px;
-    padding: 8px 20px;
-    min-width: 90px;
-}
-QPushButton#modeBtn:checked {
-    background: rgba(108, 99, 255, 0.4);
-    border: 1px solid #6c63ff;
-    color: #ffffff;
-}
-
-QPushButton#helpBtn {
-    border-radius: 16px;
-    min-width: 32px;
-    max-width: 32px;
-    min-height: 32px;
-    max-height: 32px;
-    padding: 0;
-    font-size: 15px;
-    font-weight: 700;
-}
-
-QPushButton#themeBtn {
-    border-radius: 16px;
-    min-width: 32px;
-    max-width: 32px;
-    min-height: 32px;
-    max-height: 32px;
-    padding: 0;
-    font-size: 15px;
-}
-
-QRadioButton {
-    color: #ccccee;
-    spacing: 6px;
-    padding: 4px 8px;
-}
-QRadioButton::indicator {
-    width: 16px;
-    height: 16px;
-    border-radius: 8px;
-    border: 2px solid #6666aa;
-    background: transparent;
-}
-QRadioButton::indicator:checked {
-    background: #6c63ff;
-    border: 2px solid #6c63ff;
-}
-QRadioButton::indicator:hover {
-    border: 2px solid #8880ff;
-}
-
-QProgressBar {
-    background: rgba(255, 255, 255, 0.06);
-    border: none;
-    border-radius: 8px;
-    height: 8px;
-    text-align: center;
-    color: transparent;
-}
-QProgressBar::chunk {
-    border-radius: 8px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6c63ff, stop:1 #e040fb);
-}
-
-QFrame#card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 16px;
-}
-
-QFrame#separator {
-    background: rgba(255, 255, 255, 0.06);
-    max-height: 1px;
-    margin: 4px 0;
-}
-"""
-
-_LIGHT_STYLE = """
-* {
-    font-family: 'Segoe UI', 'Inter', sans-serif;
-    font-size: 13px;
-}
-
-QWidget#mainWidget {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 #e8eaf6, stop:0.5 #f3e5f5, stop:1 #e3f2fd);
-}
-
-QLabel {
-    color: #333355;
-    font-weight: 500;
-}
-
-QLabel#titleLabel {
-    font-size: 22px;
-    font-weight: 700;
-    color: #1a1a3e;
-    padding: 4px 0;
-}
-
-QLabel#subtitleLabel {
-    font-size: 12px;
-    color: #666688;
-    padding-bottom: 8px;
-}
-
-QLabel#statusLabel {
-    font-size: 11px;
-    color: #888899;
-    padding: 2px 0;
-}
-
-QLabel#sectionLabel {
-    font-size: 11px;
-    font-weight: 600;
-    color: #5555aa;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding-top: 6px;
-}
-
-QLineEdit {
-    background: rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(0, 0, 0, 0.10);
-    border-radius: 10px;
-    padding: 10px 14px;
-    color: #222244;
-    selection-background-color: #6c63ff;
-}
-QLineEdit:focus {
-    border: 1px solid #6c63ff;
-    background: rgba(255, 255, 255, 0.9);
-}
-
-QComboBox {
-    background: rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(0, 0, 0, 0.10);
-    border-radius: 10px;
-    padding: 8px 14px;
-    color: #222244;
-    min-width: 100px;
-}
-QComboBox:hover {
-    border: 1px solid #6c63ff;
-}
-QComboBox::drop-down {
-    border: none;
-    width: 24px;
-}
-QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid #666688;
-    margin-right: 8px;
-}
-QComboBox QAbstractItemView {
-    background: #ffffff;
-    border: 1px solid #ddddee;
-    border-radius: 8px;
-    selection-background-color: #6c63ff;
-    selection-color: #ffffff;
-    color: #222244;
-    padding: 4px;
-    outline: none;
-}
-QComboBox QAbstractItemView::item {
-    padding: 6px 10px;
-    border: none;
-    outline: none;
-}
-QComboBox QAbstractItemView::item:selected {
-    background: #6c63ff;
-    color: #ffffff;
-    border: none;
-}
-
-QPushButton {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
-    padding: 8px 18px;
-    color: #333355;
-    font-weight: 600;
-}
-QPushButton:hover {
-    background: rgba(108, 99, 255, 0.15);
-    border: 1px solid #6c63ff;
-    color: #4a42dd;
-}
-QPushButton:pressed {
-    background: rgba(108, 99, 255, 0.25);
-}
-
-QPushButton#downloadBtn {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6c63ff, stop:1 #e040fb);
-    border: none;
-    border-radius: 14px;
-    padding: 14px 48px;
-    color: #ffffff;
-    font-size: 15px;
-    font-weight: 700;
-    min-width: 220px;
-}
-QPushButton#downloadBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #7b73ff, stop:1 #e860ff);
-}
-QPushButton#downloadBtn:pressed {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #5a52dd, stop:1 #c030dd);
-}
-QPushButton#downloadBtn:disabled {
-    background: rgba(108, 99, 255, 0.3);
-    color: rgba(255,255,255,0.4);
-}
-
-QPushButton#modeBtn {
-    border-radius: 10px;
-    padding: 8px 20px;
-    min-width: 90px;
-}
-QPushButton#modeBtn:checked {
-    background: rgba(108, 99, 255, 0.25);
-    border: 1px solid #6c63ff;
-    color: #4a42dd;
-}
-
-QPushButton#helpBtn {
-    border-radius: 16px;
-    min-width: 32px;
-    max-width: 32px;
-    min-height: 32px;
-    max-height: 32px;
-    padding: 0;
-    font-size: 15px;
-    font-weight: 700;
-}
-
-QPushButton#themeBtn {
-    border-radius: 16px;
-    min-width: 32px;
-    max-width: 32px;
-    min-height: 32px;
-    max-height: 32px;
-    padding: 0;
-    font-size: 15px;
-}
-
-QRadioButton {
-    color: #333355;
-    spacing: 6px;
-    padding: 4px 8px;
-}
-QRadioButton::indicator {
-    width: 16px;
-    height: 16px;
-    border-radius: 8px;
-    border: 2px solid #8888bb;
-    background: transparent;
-}
-QRadioButton::indicator:checked {
-    background: #6c63ff;
-    border: 2px solid #6c63ff;
-}
-QRadioButton::indicator:hover {
-    border: 2px solid #6c63ff;
-}
-
-QProgressBar {
-    background: rgba(0, 0, 0, 0.06);
-    border: none;
-    border-radius: 8px;
-    height: 8px;
-    text-align: center;
-    color: transparent;
-}
-QProgressBar::chunk {
-    border-radius: 8px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6c63ff, stop:1 #e040fb);
-}
-
-QFrame#card {
-    background: rgba(255, 255, 255, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 16px;
-    padding: 16px;
-}
-
-QFrame#separator {
-    background: rgba(0, 0, 0, 0.06);
-    max-height: 1px;
-    margin: 4px 0;
-}
-"""
+# ─── Settings ───
+_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.settings.json')
 
 
-class DownloaderWindow(QtWidgets.QWidget):
-    # Signals for thread-safe GUI updates
-    status_changed = QtCore.pyqtSignal(str)
-    show_info = QtCore.pyqtSignal(str, str)
-    show_error = QtCore.pyqtSignal(str, str)
-    progress_changed = QtCore.pyqtSignal(int)
+def _load() -> dict:
+    try:
+        with open(_CFG, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-    lang: str
-    theme: str
+
+def _save(d: dict) -> None:
+    try:
+        with open(_CFG, 'w') as f:
+            json.dump(d, f)
+    except Exception:
+        pass
+
+
+class App(ctk.CTk):
+    # ─── Colors ───
+    D = {
+        'bg': '#0d0b1e', 'card': '#16132e', 'brd': '#252252',
+        'acc': '#7c6fff', 'acc_h': '#9589ff',
+        'txt': '#eeeeff', 'txt2': '#9995cc', 'txt3': '#6662aa',
+        'inp': '#1c1940', 'inp_b': '#2e2a60',
+        'seg': '#1c1940', 'seg_s': '#7c6fff', 'seg_txt': '#ccccff',
+    }
+    L = {
+        'bg': '#f0ecff', 'card': '#ffffff', 'brd': '#d5d0f0',
+        'acc': '#7c6fff', 'acc_h': '#6558e0',
+        'txt': '#1a1835', 'txt2': '#6660aa', 'txt3': '#8880cc',
+        'inp': '#f5f2ff', 'inp_b': '#d5d0f0',
+        'seg': '#e8e4ff', 'seg_s': '#7c6fff', 'seg_txt': '#333355',
+    }
 
     def __init__(self) -> None:
         super().__init__()
-        self._settings = QtCore.QSettings('EasyDownload', 'EasyDownload')
+        self._s = _load()
         self.lang = 'tr'
-        self.theme = str(self._settings.value('theme', 'dark'))
-        self.setObjectName('mainWidget')
-        self.init_ui()
-        # Restore saved window geometry
-        self._restore_geometry()
-        # Connect signals
-        cast(Any, self.status_changed).connect(self.status_label.setText)
-        cast(Any, self.show_info).connect(self._on_show_info)
-        cast(Any, self.show_error).connect(self._on_show_error)
-        cast(Any, self.progress_changed).connect(self.progress.setValue)
-        # Start background FFmpeg check
-        threading.Thread(target=self.check_ffmpeg, daemon=True).start()
+        self._thm = self._s.get('theme', 'dark')
+        self._playlist = False
 
-    def _on_show_info(self, title: str, text: str) -> None:
-        QtWidgets.QMessageBox.information(self, title, text)
+        ctk.set_appearance_mode(self._thm)
+        self.title('EasyDownload')
+        self.minsize(520, 800)
 
-    def _on_show_error(self, title: str, text: str) -> None:
-        QtWidgets.QMessageBox.critical(self, title, text)
-
-    def show_guide(self) -> None:
-        self.show_info.emit(
-            _TRANSLATIONS[self.lang]['guide_title'],
-            _TRANSLATIONS[self.lang]['guide_text']
-        )
-
-    def _make_separator(self) -> QtWidgets.QFrame:
-        sep = QtWidgets.QFrame()
-        sep.setObjectName('separator')
-        sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        return sep
-
-    def _make_section_label(self, text: str) -> QtWidgets.QLabel:
-        lbl = QtWidgets.QLabel(text)
-        lbl.setObjectName('sectionLabel')
-        return lbl
-
-    def _restore_geometry(self) -> None:
-        """Restore saved window position and size from QSettings."""
-        geo = self._settings.value('geometry')
-        if geo is not None:
-            self.restoreGeometry(geo)  # type: ignore[arg-type]
+        geo = self._s.get('geo')
+        if geo:
+            self.geometry(geo)
         else:
-            # Center on screen with default size
-            screen = QtWidgets.QApplication.primaryScreen()
-            if screen:
-                sg = screen.availableGeometry()
-                x = (sg.width() - 560) // 2
-                y = (sg.height() - 780) // 2
-                self.setGeometry(x, y, 560, 780)
-            else:
-                self.resize(560, 780)
+            self.geometry('560x950')
+            self.after(30, self._center)
 
-    def closeEvent(self, event: Any) -> None:
-        """Save window geometry and theme before closing."""
-        self._settings.setValue('geometry', self.saveGeometry())
-        self._settings.setValue('theme', self.theme)
-        super().closeEvent(event)
+        self.protocol('WM_DELETE_WINDOW', self._quit)
+        self._build()
+        threading.Thread(target=self._ffmpeg_check, daemon=True).start()
 
-    def init_ui(self) -> None:
-        self.setWindowTitle(_TRANSLATIONS[self.lang]['title'])
-        self.resize(560, 780)
-        self.setMinimumSize(480, 560)
+    @property
+    def t(self) -> dict:
+        return _LANGS[self.lang]
 
-        # Main layout with padding
-        outer = QtWidgets.QVBoxLayout(self)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(12)
+    @property
+    def c(self) -> dict:
+        return self.D if self._thm == 'dark' else self.L
 
-        # ── Header row ──
-        header = QtWidgets.QHBoxLayout()
-        header.setSpacing(8)
+    def _center(self) -> None:
+        self.update_idletasks()
+        w, h = self.winfo_width(), self.winfo_height()
+        self.geometry(f'{w}x{h}+{(self.winfo_screenwidth()-w)//2}+{(self.winfo_screenheight()-h)//2}')
 
-        # Title + subtitle
-        title_col = QtWidgets.QVBoxLayout()
-        title_col.setSpacing(0)
-        title_lbl = QtWidgets.QLabel('EasyDownload')
-        title_lbl.setObjectName('titleLabel')
-        subtitle_lbl = QtWidgets.QLabel('YouTube • Instagram • TikTok • Pinterest • Spotify')
-        subtitle_lbl.setObjectName('subtitleLabel')
-        title_col.addWidget(title_lbl)
-        title_col.addWidget(subtitle_lbl)
-        header.addLayout(title_col)
-        header.addStretch()
+    def _quit(self) -> None:
+        self._s['geo'] = self.geometry()
+        self._s['theme'] = self._thm
+        _save(self._s)
+        self.destroy()
 
-        # Small round buttons
-        self.help_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['help'])
-        self.help_btn.setObjectName('helpBtn')
-        self.help_btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        cast(Any, self.help_btn.clicked).connect(self.show_guide)
-        header.addWidget(self.help_btn)
+    # ───────────── BUILD ─────────────
 
-        self.theme_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['dark'])
-        self.theme_btn.setObjectName('themeBtn')
-        self.theme_btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        cast(Any, self.theme_btn.clicked).connect(self.toggle_theme)
-        header.addWidget(self.theme_btn)
+    def _build(self) -> None:
+        c = self.c
+        for w in self.winfo_children():
+            w.destroy()
 
-        self.lang_combo = QtWidgets.QComboBox()
-        cast(Any, self.lang_combo).addItems(['🇹🇷 TR', '🇬🇧 EN'])
-        self.lang_combo.setCurrentIndex(0)
-        self.lang_combo.setFixedWidth(80)
-        cast(Any, self.lang_combo.currentIndexChanged).connect(self.change_language)
-        header.addWidget(self.lang_combo)
+        self.configure(fg_color=c['bg'])
 
-        outer.addLayout(header)
+        wrap = ctk.CTkFrame(self, fg_color='transparent')
+        wrap.pack(fill='both', expand=True, padx=26, pady=(16, 24))
 
-        # ── Card container ──
-        card = QtWidgets.QFrame()
-        card.setObjectName('card')
-        card_layout = QtWidgets.QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 16, 20, 16)
-        card_layout.setSpacing(10)
+        # ── Header ──
+        hdr = ctk.CTkFrame(wrap, fg_color='transparent')
+        hdr.pack(fill='x', pady=(0, 14))
 
-        # Platform + Mode row
-        self.platform_section = self._make_section_label(_TRANSLATIONS[self.lang]['platform'] + ' & ' + _TRANSLATIONS[self.lang]['mode'])
-        card_layout.addWidget(self.platform_section)
+        lf = ctk.CTkFrame(hdr, fg_color='transparent')
+        lf.pack(side='left')
+        ctk.CTkLabel(lf, text='EasyDownload',
+                     font=ctk.CTkFont('Segoe UI', 26, 'bold'),
+                     text_color=c['txt']).pack(anchor='w')
+        ctk.CTkLabel(lf, text='YouTube • Instagram • TikTok • Pinterest • Spotify',
+                     font=ctk.CTkFont('Segoe UI', 11),
+                     text_color=c['txt3']).pack(anchor='w', pady=(1, 0))
 
-        row1 = QtWidgets.QHBoxLayout()
-        row1.setSpacing(10)
-        self.platform_combo = QtWidgets.QComboBox()
-        cast(Any, self.platform_combo).addItems(['YouTube', 'Instagram', 'TikTok', 'Pinterest', 'Spotify'])
-        row1.addWidget(self.platform_combo, 2)
+        rf = ctk.CTkFrame(hdr, fg_color='transparent')
+        rf.pack(side='right')
 
-        self.mode_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['single'])
-        self.mode_btn.setObjectName('modeBtn')
-        self.mode_btn.setCheckable(True)
-        self.mode_btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        cast(Any, self.mode_btn.toggled).connect(self.mode_toggled)
-        row1.addWidget(self.mode_btn, 1)
-        card_layout.addLayout(row1)
+        ctk.CTkButton(rf, text='?', width=32, height=32, corner_radius=16,
+                      fg_color=c['card'], hover_color=c['brd'],
+                      text_color=c['txt'], border_width=1, border_color=c['brd'],
+                      font=ctk.CTkFont(size=14, weight='bold'),
+                      command=self._guide).pack(side='left', padx=3)
 
-        card_layout.addWidget(self._make_separator())
+        ctk.CTkButton(rf, text='☀️' if self._thm == 'dark' else '🌙',
+                      width=32, height=32, corner_radius=16,
+                      fg_color=c['card'], hover_color=c['brd'],
+                      text_color=c['txt'], border_width=1, border_color=c['brd'],
+                      font=ctk.CTkFont(size=14),
+                      command=self._flip_theme).pack(side='left', padx=3)
 
-        # URL
-        self.url_section = self._make_section_label(_TRANSLATIONS[self.lang]['url'])
-        card_layout.addWidget(self.url_section)
-        self.url_edit = QtWidgets.QLineEdit()
-        self.url_edit.setPlaceholderText(_TRANSLATIONS[self.lang]['url_placeholder'])
-        card_layout.addWidget(self.url_edit)
+        self._lang_seg = ctk.CTkSegmentedButton(
+            rf, values=['TR', 'EN'], width=80, height=30,
+            font=ctk.CTkFont(size=11, weight='bold'),
+            fg_color=c['seg'], selected_color=c['seg_s'],
+            selected_hover_color=c['acc_h'],
+            unselected_color=c['card'], unselected_hover_color=c['brd'],
+            text_color=c['seg_txt'],
+            command=self._lang_changed)
+        self._lang_seg.set('TR' if self.lang == 'tr' else 'EN')
+        self._lang_seg.pack(side='left', padx=(6, 0))
 
-        card_layout.addWidget(self._make_separator())
+        # ── Card ──
+        card = ctk.CTkFrame(wrap, fg_color=c['card'], corner_radius=18,
+                            border_width=1, border_color=c['brd'])
+        card.pack(fill='x', pady=(0, 16))
 
-        # Format
-        self.format_section = self._make_section_label(_TRANSLATIONS[self.lang]['format'])
-        card_layout.addWidget(self.format_section)
+        inn = ctk.CTkFrame(card, fg_color='transparent')
+        inn.pack(fill='x', padx=20, pady=16)
 
-        format_row = QtWidgets.QHBoxLayout()
-        format_row.setSpacing(12)
-        self.format_group = QtWidgets.QButtonGroup(self)
-        self.mp3_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp3'])
-        self.flac_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['flac'])
-        self.mp4_radio = QtWidgets.QRadioButton(_TRANSLATIONS[self.lang]['mp4'])
-        self.mp4_radio.setChecked(True)
-        for r in (self.mp3_radio, self.flac_radio, self.mp4_radio):
-            self.format_group.addButton(r)
-            cast(Any, r.toggled).connect(self.update_quality_ui)
-            r.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-            format_row.addWidget(r)
-        card_layout.addLayout(format_row)
+        # — Platform —
+        self._lp = self._section(inn, self.t['platform'])
+        self._plat_seg = ctk.CTkSegmentedButton(
+            inn, values=['YouTube', 'Instagram', 'TikTok', 'Pinterest', 'Spotify'],
+            height=34, font=ctk.CTkFont(size=12, weight='bold'),
+            fg_color=c['seg'], selected_color=c['seg_s'],
+            selected_hover_color=c['acc_h'],
+            unselected_color=c['card'], unselected_hover_color=c['brd'],
+            text_color=c['seg_txt'])
+        self._plat_seg.set('YouTube')
+        self._plat_seg.pack(fill='x', pady=(0, 10))
 
-        # Quality
-        self.quality_section = self._make_section_label(_TRANSLATIONS[self.lang]['quality_video'])
-        card_layout.addWidget(self.quality_section)
-        self.quality_combo = QtWidgets.QComboBox()
-        cast(Any, self.quality_combo).addItems(['360p', '480p', '720p', '1080p'])
-        card_layout.addWidget(self.quality_combo)
+        # — Mode —
+        self._lm = self._section(inn, self.t['mode'])
+        self._mode_seg = ctk.CTkSegmentedButton(
+            inn, values=[self.t['mode_single'], self.t['mode_playlist']],
+            height=34, font=ctk.CTkFont(size=12, weight='bold'),
+            fg_color=c['seg'], selected_color=c['seg_s'],
+            selected_hover_color=c['acc_h'],
+            unselected_color=c['card'], unselected_hover_color=c['brd'],
+            text_color=c['seg_txt'])
+        self._mode_seg.set(self.t['mode_single'])
+        self._mode_seg.pack(fill='x', pady=(0, 10))
 
-        card_layout.addWidget(self._make_separator())
+        self._sep(inn, c)
 
-        # Download location
-        self.dir_section = self._make_section_label(_TRANSLATIONS[self.lang]['download_location'])
-        card_layout.addWidget(self.dir_section)
+        # — URL —
+        self._lu = self._section(inn, self.t['url'])
+        self._url = ctk.CTkEntry(
+            inn, height=40, corner_radius=10,
+            fg_color=c['inp'], border_color=c['inp_b'],
+            text_color=c['txt'], placeholder_text=self.t['url_placeholder'],
+            placeholder_text_color=c['txt3'], font=ctk.CTkFont(size=13))
+        self._url.pack(fill='x', pady=(0, 10))
 
-        dir_row = QtWidgets.QHBoxLayout()
-        dir_row.setSpacing(8)
-        self.dir_edit = QtWidgets.QLineEdit()
-        self.dir_edit.setPlaceholderText(_TRANSLATIONS[self.lang]['dir_placeholder'])
-        dir_row.addWidget(self.dir_edit, 1)
-        self.choose_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['choose_location'])
-        self.choose_btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        cast(Any, self.choose_btn.clicked).connect(self.choose_folder)
-        dir_row.addWidget(self.choose_btn)
-        card_layout.addLayout(dir_row)
+        self._sep(inn, c)
 
-        outer.addWidget(card)
+        # — Format —
+        self._lf = self._section(inn, self.t['format'])
+        self._fmt_seg = ctk.CTkSegmentedButton(
+            inn, values=['MP3', 'MP4'],
+            height=34, font=ctk.CTkFont(size=13, weight='bold'),
+            fg_color=c['seg'], selected_color=c['seg_s'],
+            selected_hover_color=c['acc_h'],
+            unselected_color=c['card'], unselected_hover_color=c['brd'],
+            text_color=c['seg_txt'],
+            command=self._fmt_changed)
+        self._fmt_seg.set('MP4')
+        self._fmt_seg.pack(fill='x', pady=(0, 10))
+
+        # — Quality —
+        self._lq = self._section(inn, self.t['quality_video'])
+        self._qual_seg = ctk.CTkSegmentedButton(
+            inn, values=['360p', '480p', '720p', '1080p'],
+            height=34, font=ctk.CTkFont(size=12, weight='bold'),
+            fg_color=c['seg'], selected_color=c['seg_s'],
+            selected_hover_color=c['acc_h'],
+            unselected_color=c['card'], unselected_hover_color=c['brd'],
+            text_color=c['seg_txt'])
+        self._qual_seg.set('1080p')
+        self._qual_seg.pack(fill='x', pady=(0, 10))
+
+        self._sep(inn, c)
+
+        # — Download location —
+        self._ld = self._section(inn, self.t['download_location'])
+        dr = ctk.CTkFrame(inn, fg_color='transparent')
+        dr.pack(fill='x')
+
+        self._dir = ctk.CTkEntry(
+            dr, height=38, corner_radius=10,
+            fg_color=c['inp'], border_color=c['inp_b'],
+            text_color=c['txt'], placeholder_text=self.t['dir_placeholder'],
+            placeholder_text_color=c['txt3'], font=ctk.CTkFont(size=13))
+        self._dir.pack(side='left', fill='x', expand=True, padx=(0, 8))
+
+        self._browse = ctk.CTkButton(
+            dr, text=self.t['browse'], height=38, width=80, corner_radius=10,
+            fg_color=c['card'], hover_color=c['brd'],
+            text_color=c['txt2'], border_width=1, border_color=c['brd'],
+            font=ctk.CTkFont(size=12), command=self._pick_dir)
+        self._browse.pack(side='right')
 
         # ── Progress ──
-        self.progress = QtWidgets.QProgressBar()
-        self.progress.setValue(0)
-        outer.addWidget(self.progress)
+        self._prog = ctk.CTkProgressBar(
+            wrap, height=6, corner_radius=3,
+            fg_color=c['inp'], progress_color=c['acc'])
+        self._prog.set(0)
+        self._prog.pack(fill='x', pady=(10, 4))
 
         # ── Status ──
-        self.status_label = QtWidgets.QLabel('')
-        self.status_label.setObjectName('statusLabel')
-        self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        outer.addWidget(self.status_label)
+        self._status = ctk.CTkLabel(wrap, text='',
+                                     font=ctk.CTkFont(size=11),
+                                     text_color=c['txt3'])
+        self._status.pack(pady=(2, 10))
 
         # ── Download button ──
-        self.download_btn = QtWidgets.QPushButton(_TRANSLATIONS[self.lang]['download'])
-        self.download_btn.setObjectName('downloadBtn')
-        self.download_btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        cast(Any, self.download_btn.clicked).connect(self.start_download)
-        outer.addWidget(self.download_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._dl_btn = ctk.CTkButton(
+            wrap, text=self.t['download'], height=52, width=240,
+            corner_radius=14, font=ctk.CTkFont('Segoe UI', 15, 'bold'),
+            fg_color=c['acc'], hover_color=c['acc_h'],
+            text_color='#ffffff', command=self._go)
+        self._dl_btn.pack(pady=(0, 8))
 
-        outer.addStretch()
+    def _section(self, parent: ctk.CTkFrame, text: str) -> ctk.CTkLabel:
+        lbl = ctk.CTkLabel(parent, text=text,
+                           font=ctk.CTkFont('Segoe UI', 10, 'bold'),
+                           text_color=self.c['txt3'])
+        lbl.pack(anchor='w', pady=(8, 5))
+        return lbl
 
-        self.apply_theme()
-        self.update_quality_ui()
+    @staticmethod
+    def _sep(parent: ctk.CTkFrame, c: dict) -> None:
+        ctk.CTkFrame(parent, fg_color=c['brd'], height=1, corner_radius=0).pack(fill='x', pady=4)
 
-        # Remove ugly OS frame from all QComboBox popups
-        for combo in self.findChildren(QtWidgets.QComboBox):
-            popup = combo.view().window()
-            if popup:
-                popup.setWindowFlags(
-                    QtCore.Qt.WindowType.Popup
-                    | QtCore.Qt.WindowType.FramelessWindowHint
-                    | QtCore.Qt.WindowType.NoDropShadowWindowHint
-                )
-                popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+    # ───────────── ACTIONS ─────────────
 
-    # ── Slots ──
-
-    def mode_toggled(self, checked: bool) -> None:
-        t = _TRANSLATIONS[self.lang]
-        self.mode_btn.setText(t['playlist'] if checked else t['single'])
-
-    def choose_folder(self) -> None:
-        d = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
+    def _pick_dir(self) -> None:
+        d = filedialog.askdirectory()
         if d:
-            self.dir_edit.setText(d)
+            self._dir.delete(0, 'end')
+            self._dir.insert(0, d)
 
-    def change_language(self, idx: int) -> None:
-        self.lang = 'tr' if idx == 0 else 'en'
-        t = _TRANSLATIONS[self.lang]
-        self.setWindowTitle(t['title'])
-        self.mode_btn.setText(t['single'] if not self.mode_btn.isChecked() else t['playlist'])
-        self.mp3_radio.setText(t['mp3'])
-        self.mp4_radio.setText(t['mp4'])
-        self.flac_radio.setText(t['flac'])
-        self.choose_btn.setText(t['choose_location'])
-        self.download_btn.setText(t['download'])
-        self.help_btn.setText(t['help'])
-        self.url_edit.setPlaceholderText(t['url_placeholder'])
-        self.dir_edit.setPlaceholderText(t['dir_placeholder'])
-        self.platform_section.setText(t['platform'] + ' & ' + t['mode'])
-        self.url_section.setText(t['url'])
-        self.format_section.setText(t['format'])
-        self.dir_section.setText(t['download_location'])
-        self.update_quality_ui()
-        self.theme_btn.setText(t['light'] if self.theme == 'dark' else t['dark'])
+    def _lang_changed(self, val: str) -> None:
+        self.lang = 'tr' if val == 'TR' else 'en'
+        t = self.t
+        self._lp.configure(text=t['platform'])
+        self._lm.configure(text=t['mode'])
+        self._lu.configure(text=t['url'])
+        self._lf.configure(text=t['format'])
+        self._ld.configure(text=t['download_location'])
+        self._browse.configure(text=t['browse'])
+        self._dl_btn.configure(text=t['download'])
+        self._url.configure(placeholder_text=t['url_placeholder'])
+        self._dir.configure(placeholder_text=t['dir_placeholder'])
+        # Update mode segmented button values
+        old_mode = self._mode_seg.get()
+        is_playlist = old_mode in [_TR['mode_playlist'], _EN['mode_playlist']]
+        self._mode_seg.configure(values=[t['mode_single'], t['mode_playlist']])
+        self._mode_seg.set(t['mode_playlist'] if is_playlist else t['mode_single'])
+        self._fmt_changed(self._fmt_seg.get())
 
-    def update_quality_ui(self, _checked: bool = False) -> None:
-        t = _TRANSLATIONS[self.lang]
-        if self.flac_radio.isChecked():
-            label = t['quality_flac']
-            items = [label]
-        elif self.mp3_radio.isChecked():
-            label = t['quality_audio']
-            items = ['128', '192', '256', '320']
+    def _fmt_changed(self, val: str) -> None:
+        t = self.t
+        if val == 'MP3':
+            self._lq.configure(text=t['quality_audio'])
+            self._qual_seg.configure(values=['128', '192', '256', '320', 'FLAC'])
+            self._qual_seg.set('320')
         else:
-            label = t['quality_video']
-            items = ['360p', '480p', '720p', '1080p']
+            self._lq.configure(text=t['quality_video'])
+            self._qual_seg.configure(values=['360p', '480p', '720p', '1080p'])
+            self._qual_seg.set('1080p')
 
-        self.quality_section.setText(label)
-        current = self.quality_combo.currentText()
-        self.quality_combo.blockSignals(True)
-        self.quality_combo.clear()
-        cast(Any, self.quality_combo).addItems(items)
-        if current in items:
-            self.quality_combo.setCurrentText(current)
-        self.quality_combo.blockSignals(False)
+    def _flip_theme(self) -> None:
+        self._thm = 'light' if self._thm == 'dark' else 'dark'
+        ctk.set_appearance_mode(self._thm)
+        self._build()
+        self._fmt_changed(self._fmt_seg.get())
 
-    def toggle_theme(self) -> None:
-        self.theme = 'dark' if self.theme == 'light' else 'light'
-        self.apply_theme()
-        t = _TRANSLATIONS[self.lang]
-        self.theme_btn.setText(t['light'] if self.theme == 'dark' else t['dark'])
+    def _guide(self) -> None:
+        t = self.t
+        c = self.c
+        w = ctk.CTkToplevel(self)
+        w.title(t['guide_title'])
+        w.geometry('400x260')
+        w.resizable(False, False)
+        w.transient(self)
+        w.grab_set()
+        w.configure(fg_color=c['bg'])
+        ctk.CTkLabel(w, text=f"📖  {t['guide_title']}",
+                     font=ctk.CTkFont(size=18, weight='bold'),
+                     text_color=c['txt']).pack(pady=(20, 8))
+        ctk.CTkLabel(w, text=t['guide_text'], font=ctk.CTkFont(size=12),
+                     text_color=c['txt2'], justify='left', wraplength=340).pack(padx=24, anchor='w')
+        ctk.CTkButton(w, text='OK', width=90, height=32, corner_radius=10,
+                      fg_color=c['acc'], hover_color=c['acc_h'],
+                      command=w.destroy).pack(pady=(14, 16))
 
-    def apply_theme(self) -> None:
-        if self.theme == 'dark':
-            self.setStyleSheet(_DARK_STYLE)
-        else:
-            self.setStyleSheet(_LIGHT_STYLE)
+    # ───────────── FFmpeg ─────────────
 
-    # ── FFmpeg ──
+    def _ss(self, txt: str) -> None:
+        self.after(0, lambda: self._status.configure(text=txt))
 
-    def check_ffmpeg(self) -> None:
-        if shutil.which('ffmpeg') is not None:
-            self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_installed'])
-            return
+    def _sp(self, v: float) -> None:
+        self.after(0, lambda: self._prog.set(v))
 
-        app_ffmpeg_bin = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'bin')
-        embedded_ffmpeg = shutil.which(
-            'ffmpeg',
-            path=app_ffmpeg_bin + os.pathsep + os.environ.get('PATH', '')
-        )
-        if embedded_ffmpeg:
-            os.environ['PATH'] = app_ffmpeg_bin + os.pathsep + os.environ.get('PATH', '')
-            self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_installed'])
-            return
+    def _ffmpeg_check(self) -> None:
+        if shutil.which('ffmpeg'):
+            self._ss(self.t['ffmpeg_installed']); return
 
-        self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_downloading'])
+        fb = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg', 'bin')
+        if shutil.which('ffmpeg', path=fb + os.pathsep + os.environ.get('PATH', '')):
+            os.environ['PATH'] = fb + os.pathsep + os.environ.get('PATH', '')
+            self._ss(self.t['ffmpeg_installed']); return
+
+        self._ss(self.t['ffmpeg_downloading'])
         try:
             if sys.platform.startswith('win'):
                 url = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
-                fd, tmpzip = tempfile.mkstemp(suffix='.zip')
-                os.close(fd)
-                urllib.request.urlretrieve(url, tmpzip)
-
-                extract_root = os.path.join(os.path.dirname(__file__), 'ffmpeg')
-                if os.path.exists(extract_root):
-                    try:
-                        shutil.rmtree(extract_root)
-                    except Exception:
-                        pass
-                os.makedirs(extract_root, exist_ok=True)
-
-                with zipfile.ZipFile(tmpzip, 'r') as z:
-                    members = z.namelist()
-                    ffexes = [m for m in members if m.lower().endswith('ffmpeg.exe')]
-                    if not ffexes:
-                        raise Exception('ffmpeg.exe not found in archive')
-                    z.extractall(extract_root)
-
-                found_bin = None
-                for root, _, files in os.walk(extract_root):
-                    if 'ffmpeg.exe' in files:
-                        found_bin = root
-                        break
-                if not found_bin:
-                    raise Exception('Could not locate ffmpeg binary after extraction')
-
-                final_bin = os.path.join(os.path.dirname(__file__), 'ffmpeg', 'bin')
-                if os.path.exists(final_bin):
-                    shutil.rmtree(final_bin)
-                shutil.move(found_bin, final_bin)
-                os.environ['PATH'] = final_bin + os.pathsep + os.environ.get('PATH', '')
-
-                try:
-                    os.remove(tmpzip)
-                except Exception:
-                    pass
-
-                if shutil.which('ffmpeg') is not None:
-                    self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_installed'])
-                else:
-                    raise Exception('ffmpeg executable not found after installation')
+                fd, tmp = tempfile.mkstemp(suffix='.zip'); os.close(fd)
+                urllib.request.urlretrieve(url, tmp)
+                root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg')
+                if os.path.exists(root): shutil.rmtree(root, True)
+                os.makedirs(root, exist_ok=True)
+                with zipfile.ZipFile(tmp, 'r') as z:
+                    if not any(m.lower().endswith('ffmpeg.exe') for m in z.namelist()):
+                        raise RuntimeError('ffmpeg.exe missing')
+                    z.extractall(root)
+                found = None
+                for r, _, fs in os.walk(root):
+                    if 'ffmpeg.exe' in fs: found = r; break
+                if not found: raise RuntimeError('ffmpeg not found')
+                final = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg', 'bin')
+                if os.path.exists(final): shutil.rmtree(final)
+                shutil.move(found, final)
+                os.environ['PATH'] = final + os.pathsep + os.environ.get('PATH', '')
+                try: os.remove(tmp)
+                except Exception: pass
+                if shutil.which('ffmpeg'): self._ss(self.t['ffmpeg_installed'])
+                else: raise RuntimeError('ffmpeg not accessible')
             else:
-                subprocess.run(
-                    [sys.executable, '-m', 'spotdl', '--download-ffmpeg'],
-                    check=True, capture_output=True, timeout=60
-                )
-                self.status_changed.emit(_TRANSLATIONS[self.lang]['ffmpeg_installed'])
+                subprocess.run([sys.executable, '-m', 'spotdl', '--download-ffmpeg'],
+                               check=True, capture_output=True, timeout=60)
+                self._ss(self.t['ffmpeg_installed'])
         except Exception as e:
-            self.status_changed.emit(
-                _TRANSLATIONS[self.lang].get('ffmpeg_failed', 'FFmpeg download failed.')
-            )
-            try:
-                self.show_error.emit(_TRANSLATIONS[self.lang]['error'], str(e))
-            except Exception:
-                pass
+            self._ss(self.t['ffmpeg_failed'])
+            self.after(0, lambda: messagebox.showerror(self.t['error'], str(e)))
 
-    # ── Download ──
+    # ───────────── DOWNLOAD ─────────────
 
-    def start_download(self) -> None:
-        self.download_btn.setEnabled(False)
-        threading.Thread(target=self._download_thread, daemon=True).start()
+    def _go(self) -> None:
+        self._dl_btn.configure(state='disabled')
+        threading.Thread(target=self._dl, daemon=True).start()
 
-    def _download_thread(self) -> None:
-        t = _TRANSLATIONS[self.lang]
-        url = self.url_edit.text().strip()
+    def _dl(self) -> None:
+        t = self.t
+        url = self._url.get().strip()
         if not url:
-            self.show_error.emit(t['error'], t['url'])
-            self.download_btn.setEnabled(True)
+            self.after(0, lambda: messagebox.showwarning(t['error'], 'URL boş / empty'))
+            self.after(0, lambda: self._dl_btn.configure(state='normal'))
             return
 
-        platform = self.platform_combo.currentText()
+        platform = self._plat_seg.get()
+        mix = _is_mix(url)
+        if mix:
+            url = _strip_mix(url)
+            self._ss(t['mix_detected'])
 
-        # ── Mix link detection ──
-        is_mix = False
-        if _is_youtube_mix(url):
-            is_mix = True
-            url = _extract_single_video_url(url)
-            self.status_changed.emit(t['mix_detected'])
+        mode_val = self._mode_seg.get()
+        is_playlist = mode_val in [_TR['mode_playlist'], _EN['mode_playlist']]
 
-        if self.mp3_radio.isChecked():
-            format_type = 'MP3'
-        elif self.flac_radio.isChecked():
-            format_type = 'FLAC'
-        else:
-            format_type = 'MP4'
-
-        self.status_changed.emit(t['downloading'])
-        self.progress_changed.emit(0)
+        fmt = self._fmt_seg.get()
+        self._ss(t['downloading'])
+        self._sp(0)
 
         try:
-            out_dir = self.dir_edit.text() or os.path.join(os.path.dirname(__file__), 'Downloads')
-            os.makedirs(out_dir, exist_ok=True)
+            out = self._dir.get().strip() or os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 'Downloads')
+            os.makedirs(out, exist_ok=True)
 
             if platform == 'Spotify':
-                cmd = [sys.executable, '-m', 'spotdl', 'download', url, '--output', out_dir]
-                subprocess.run(cmd, check=True)
+                subprocess.run(
+                    [sys.executable, '-m', 'spotdl', 'download', url, '--output', out],
+                    check=True)
             else:
-                ydl_opts: dict[str, Any] = {
-                    'outtmpl': os.path.join(out_dir, '%(title)s.%(ext)s'),
-                    'noplaylist': not self.mode_btn.isChecked() or is_mix,
-                    'progress_hooks': [self._progress_hook],
+                opts: dict[str, Any] = {
+                    'outtmpl': os.path.join(out, '%(title)s.%(ext)s'),
+                    'noplaylist': not is_playlist or mix,
+                    'progress_hooks': [self._hook],
                 }
-
-                if format_type == 'FLAC':
-                    ydl_opts['format'] = 'bestaudio/best'
-                    ydl_opts['postprocessors'] = [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'flac',
-                        'preferredquality': '0',
-                    }]
-                elif format_type == 'MP3':
-                    quality = self.quality_combo.currentText()
-                    ydl_opts['format'] = 'bestaudio/best'
-                    ydl_opts['postprocessors'] = [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': quality,
-                    }]
+                qual = self._qual_seg.get()
+                if fmt == 'MP3' and qual == 'FLAC':
+                    opts['format'] = 'bestaudio/best'
+                    opts['postprocessors'] = [{'key': 'FFmpegExtractAudio',
+                                               'preferredcodec': 'flac',
+                                               'preferredquality': '0'}]
+                elif fmt == 'MP3':
+                    opts['format'] = 'bestaudio/best'
+                    opts['postprocessors'] = [{'key': 'FFmpegExtractAudio',
+                                               'preferredcodec': 'mp3',
+                                               'preferredquality': qual}]
                 else:
-                    q = self.quality_combo.currentText().replace('p', '')
-                    ydl_opts['format'] = f'bestvideo[height<={q}]+bestaudio/best[height<={q}]/best'
+                    q = qual.replace('p', '')
+                    opts['format'] = f'bestvideo[height<={q}]+bestaudio/best[height<={q}]/best'
 
-                with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
 
-            self.progress_changed.emit(100)
-            self.status_changed.emit(t['download_complete'])
-            self.show_info.emit(t['success'], t['download_complete'])
+            self._sp(1.0)
+            self._ss(t['download_complete'])
+            self.after(0, lambda: messagebox.showinfo(t['success'], t['download_complete']))
         except Exception as e:
-            self.show_error.emit(t['error'], str(e))
-            self.status_changed.emit('')
+            self._ss('')
+            self.after(0, lambda: messagebox.showerror(t['error'], str(e)))
         finally:
-            self.download_btn.setEnabled(True)
+            self.after(0, lambda: self._dl_btn.configure(state='normal'))
 
-    def _progress_hook(self, d: dict) -> None:
+    def _hook(self, d: dict) -> None:
         if d.get('status') == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-            downloaded = d.get('downloaded_bytes', 0)
+            done = d.get('downloaded_bytes', 0)
             if total > 0:
-                pct = int(downloaded / total * 100)
-                self.progress_changed.emit(min(pct, 99))
+                self._sp(min(done / total, 0.99))
         elif d.get('status') == 'finished':
-            self.progress_changed.emit(100)
+            self._sp(1.0)
 
 
 if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
-    app.setStyle('Fusion')
-    win = DownloaderWindow()
-    win.show()
-    sys.exit(app.exec())
+    app = App()
+    app.mainloop()
