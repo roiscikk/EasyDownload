@@ -18,4 +18,4 @@ EN
 
 Gui :
 
-<img width="690" height="498" alt="image" src="https://github.com/user-attachments/assets/063721a8-bc6e-471c-8b00-7b82403394ef" />
+<img width="513" height="805" alt="image" src="https://github.com/user-attachments/assets/37ea3e0f-6c6f-4a90-93b2-a087f415262f" />
